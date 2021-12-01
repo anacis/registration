@@ -3,40 +3,39 @@ import h5py
 import numpy as np
 from torch.utils.data import Dataset
 
-def normalize(img):
-    return img/np.percentile(img, 95)
+def normalize(img, percent=95):
+    return img/np.percentile(img, percent)
 
 class RegistrationDataset(Dataset):
-    def __init__(self, data_dir, transform=None, target_transform=None, crop=None):
+    def __init__(self, data_dir, transform=None, target_transform=None, contrast_transform=None):
         self.data_paths = os.listdir(data_dir)
         self.data_dir = data_dir
         self.transform = transform
-        self.crop = crop
+        self.contrast_transform = contrast_transform
         self.target_transform = target_transform
 
     def __getitem__(self, index):
         #Select Image 1 and apply Normalization Transforms (fixed output)
         hf = h5py.File(os.path.join(self.data_dir, self.data_paths[index]), 'r')
         im = normalize(np.abs(np.flip(np.array(hf.get('target')))))
-        im = np.expand_dims(im, axis=2)
+        fixed = np.expand_dims(im, axis=2)
         if self.transform:
-            im = self.transform(im)
+            fixed = self.transform(fixed)
 
-        imT = im
+        fixed_contrast = fixed
 
-        #crop images (#TODO: Try applying transform then crop)
-        if self.crop:
-            im = self.crop(im)
-            imT = self.crop(imT)
+        percent = np.random.randint(90, 100)
+        fixed_contrast = normalize(fixed_contrast, percent=percent)
 
-        #TODO: try simpler transformation (affine or translate)
-
+        if self.contrast_transform:
+            fixed_contrast = self.contrast_transform(fixed_contrast)
+        
+        moving = fixed_contrast
+        
         #Apply Smooth Transform to Image 2 (moving input)
         if self.target_transform:
-            imT = self.target_transform(imT)
+            moving = self.target_transform(moving)
 
-
-
-        return imT, im
+        return moving, fixed, fixed_contrast
     def __len__(self):
         return len(self.data_paths)
