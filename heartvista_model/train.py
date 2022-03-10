@@ -12,6 +12,8 @@ import numpy as np
 from glob import glob
 import re
 from optparse import OptionParser
+from momentum.momentum_model import MomentumModel
+from momentum.network import SimpleNet
 
 def get_args():
     parser = OptionParser()
@@ -21,6 +23,8 @@ def get_args():
                       help='GPU number, default is None (-g 0 means use gpu 0)')
     parser.add_option('--logdir', "--ld",
                       help='Directory for saving logs and checkpoints')
+    parser.add_option('--uflossdir', "--ud",
+                      help='Directory for loading UFLoss checkpoints')
     parser.add_option('--learning_rate', '--lr', default=1e-4, type='float',
                       help='learning rate for the model')
     parser.add_option('--batchsize', '--bs', dest='batchsize',
@@ -30,16 +34,12 @@ def get_args():
     parser.add_option('-s', '--shape', default="perspective", type='string',
                       help='Shape transform to use (perspective, affine)')
     parser.add_option('-l', '--loss', default="l2", type='string',
-                      help='Loss to use (l2, ssd, ncc)')
+                      help='Loss to use (l2, ufloss, ssd, ncc)')
     parser.add_option('-a', '--alpha', default="100", type='int',
                       help='Alpha value to use for variational loss')
 
     (options, args) = parser.parse_args()
     return options
-
-
-def normalize1(x):
-    return 2 * (x - torch.min(x))/(torch.max(x) - torch.min(x)) - 1
 
 class Trainer:
 
@@ -68,50 +68,54 @@ class Trainer:
         self.optimizer = optim.Adam(self.net.parameters(), lr=self.args.learning_rate) 
 
         self.restore_model()
+        if self.args.loss =="ufloss":
+            self.load_ufloss()
 
     def get_transforms(self):
         self.transform = transforms.Compose([transforms.ToTensor(), transforms.RandomCrop((256, 256))])
-
+        
         self.contrast_transform = transforms.Compose(
-            [transforms.ColorJitter(brightness=0.8, contrast=0.8, saturation=0.8, hue=0.4),
-                transforms.GaussianBlur(kernel_size=5, sigma=(0.1, 2.0)),
-                transforms.RandomAdjustSharpness(sharpness_factor=1.5, p=0.2)])
+            [transforms.ColorJitter(brightness=0.8, contrast=0.8, saturation=0.8, hue=0.4), 
+                transforms.GaussianBlur(kernel_size=5, sigma=(0.1, 2.0))])
+                # transforms.RandomAdjustSharpness(sharpness_factor=1.5, p=0.2)])
 
         if self.args.shape == "perspective":
             self.shape_transform = transforms.Compose([transforms.RandomPerspective(distortion_scale=0.6, p=1.0)])
         else:
-            self.shape_transform = transforms.Compose([transforms.RandomAffine(degrees = 30, translate=None)])
+            self.shape_transform = transforms.Compose([transforms.RandomAffine(degrees = 30, translate=(0.2, 0.2))])
             
     def variational_loss(self, resampled, fixed, deform_field):
         if self.args.loss == "l2":
             l2 = nn.MSELoss()
+            # #blur image prior to calculating loss
+            # resampled = transforms.functional.gaussian_blur(resampled, kernel_size=5)
+            # fixed = transforms.functional.gaussian_blur(fixed, kernel_size=5)
             loss = l2(resampled,fixed)
+        elif self.args.loss =="ufloss":
+            loss = self.ufloss(resampled, fixed, deform_field)
         elif self.args.loss == "ssd":
             loss = torch.mean((resampled-fixed)**2) 
         else: #loss = ncc
             loss = torch.dot(resampled/torch.norm(resampled), fixed/torch.norm(fixed))  #tru mean instead of norm
 
-        alpha = self.args.alpha #TODO mess around with alpha and regularizer values
+        alpha = self.args.alpha 
         w_variance = torch.mean(torch.pow(deform_field[:,:,:,:-1] - deform_field[:,:,:,1:], 2))
         h_variance = torch.mean(torch.pow(deform_field[:,:,:-1,:] - deform_field[:,:,1:,:], 2))
-        
-        # if torch.any(torch.isnan(torch.pow(deform_field[:,:,:,:-1] - deform_field[:,:,:,1:], 2))) or torch.any(torch.isnan(torch.pow(deform_field[:,:,:-1,:] - deform_field[:,:,1:,:], 2))):    
-        print("\n\n")
-        print("LOSS INFO")
-        print(f"l2: {loss}")
-        print(f"deform field: {torch.any(torch.isnan(deform_field))}")
-        print(f"w subtraction: {torch.any(torch.isnan(deform_field[:,:,:,:-1] - deform_field[:,:,:,1:]))}")
-        print(f"h subtraction: {torch.any(torch.isnan(deform_field[:,:,:-1,:] - deform_field[:,:,1:,:]))}")
-        print(f"w_variance: {w_variance}")
-        print(f"h_variance: {h_variance}")
-        print("\n\n")
 
         variational = alpha *(h_variance + w_variance)
 
-        #regularizer = nn.L1Loss()(deform_field, torch.zeros_like(deform_field))
+        return loss + variational, loss, variational
 
-        return loss + variational, loss, variational # + 0.1 * regularizer
-    
+
+    def ufloss(self, resampled, fixed, deform_field):
+        resampled_embedding = self.ksnet(resampled)[0]
+        fixed_embedding = self.ksnet(fixed)[0]
+       
+        l2 = nn.MSELoss()
+        loss = l2(resampled_embedding,fixed_embedding)
+
+        return loss
+            
     def restore_model(self, checkpoint_path=""):
             """Restore model checkpoint (if any) and continue training from there.
 
@@ -141,6 +145,27 @@ class Trainer:
                 print("No saved model found. Training from scratch.")
                 self.start_epoch = 0
 
+    def load_ufloss(self, ufloss_dir_checkpoint=""):
+        if not ufloss_dir_checkpoint:
+            ufloss_dir_checkpoint = sorted(glob(os.path.join(self.args.uflossdir, 'checkpoints/*')),
+                            key=lambda x: int(re.match(".*[a-z]+(\d+).pth", x).group(1)))[-1]
+        
+        if not ufloss_dir_checkpoint:
+            print(f"couldn't find checkpoint in {self.args.uflossdir}")
+            return
+
+        self.ksnet = MomentumModel(SimpleNet, magnitude=True)
+        print(f"Loading UFLoss checkpoint from: {ufloss_dir_checkpoint}")
+        # Loading on cpu before transferring to model
+        self.ksnet.load_state_dict(torch.load(ufloss_dir_checkpoint, "cpu")["state_dict"])
+        self.ksnet = self.ksnet.target_network
+        self.ksnet.to(self.device)
+        self.ksnet.eval()
+
+        # save_dir = os.path.join(self.args.logdir, "ufloss_results")
+        # os.makedirs(save_dir, exist_ok=True)
+    
+    
     def save_model(self, epoch, filepath="", **kwargs):
             """Save a model checkpoint.
             Parameters
@@ -203,7 +228,7 @@ class Trainer:
                 resamp_grid = torch.stack((y_resample, x_resample), dim=-1).float()
                 
                 resampled = F.grid_sample(moving, resamp_grid) #apply deformation field to input
-                loss, l2_loss, variational = self.criterion(resampled, fixed_contrast, deform_fields_small)
+                loss, l2_loss, variational = self.criterion(resampled, fixed, deform_fields_small)
                 if torch.any(torch.isnan(loss)):
                     print("Loss is Nan")
                     nan=True
@@ -219,7 +244,7 @@ class Trainer:
                 break
 
             # print statistics
-            max_to_plot = 5
+            max_to_plot = 16
             self.summary_train.add_images("moving", torch.clip(moving[:max_to_plot], 0, 1), epoch) 
             self.summary_train.add_images("resampled", torch.clip(resampled[:max_to_plot], 0, 1), epoch)
             self.summary_train.add_images("fixed", torch.clip(fixed[:max_to_plot], 0, 1), epoch)
@@ -232,6 +257,11 @@ class Trainer:
             self.summary_train.add_scalar("Loss", np.mean(running_loss), epoch)
             self.summary_train.add_scalar("L2 Loss", np.mean(running_l2), epoch)
             self.summary_train.add_scalar("Variational Loss", np.mean(running_variational), epoch)
+
+            self.summary_train.add_histogram("moving images histogram", moving)
+            self.summary_train.add_histogram("fixed images histogram", fixed)
+            self.summary_train.add_histogram("fixed contrast images histogram", fixed_contrast)
+
             
             print('[%d, %5d] loss: %.3f' %
                 (epoch + 1, i + 1, np.mean(running_loss)))
