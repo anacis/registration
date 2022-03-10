@@ -104,11 +104,16 @@ class UFData(Dataset):
                 image1 = self.complex2channels(self.random_phase(image))
                 image2 = self.complex2channels(self.random_phase(image2))
 
-            invariance_shift = random.uniform(0, 5)
-            image2 += invariance_shift
             
-            image1 = torch.clamp(image1, max = np.percentile(image1, 99))
-            image2 = torch.clamp(image2, max = np.percentile(image2, 99))
+            top_clip1 = random.uniform(90, 100)
+            top_clip2 = random.uniform(90, 100)
+            image1 = torch.clamp(image1, max = np.percentile(image1, top_clip1))
+            image2 = torch.clamp(image2, max = np.percentile(image2, top_clip2))
+
+            bottom_clip1 = random.uniform(0, 5)
+            bottom_clip2 = random.uniform(0, 5)
+            image1 = torch.clamp(image1, min = np.percentile(image1, bottom_clip1))
+            image2 = torch.clamp(image2, min = np.percentile(image2, bottom_clip2))
 
             percent = random.uniform(90, 100)
             image1 = normalize(image1, percent)

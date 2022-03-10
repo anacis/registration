@@ -136,7 +136,6 @@ class Trainer:
                 target_images = target_images.to(self.device)
 
                 embeddings, target_embeddings = self.model(images, target_images)
-                print(embeddings.shape)
                 logits, labels = self.model.get_logits_labels(embeddings, target_embeddings)
                 loss = self.criterion(logits, labels)
 
@@ -155,6 +154,7 @@ class Trainer:
                 if first_step:
                     first_step = False
                     self.log_images(epoch, images, target_images)
+                    self.log_embedding_images(epoch, embeddings, target_embeddings)
                     self.log_embeddings(epoch, images, embeddings, "embeddings")
                     self.log_embeddings(epoch, target_images, target_embeddings, "target_embeddings")
 
@@ -166,6 +166,22 @@ class Trainer:
             if epoch % 10 == 0:
                 self.save_model(epoch)
 
+    def log_embedding_images(self, epoch, images, target_images, max_outputs=1, num_embs=5):
+        images = images[:max_outputs]
+        target_images = target_images[:max_outputs]
+
+        images /= torch.maximum(images.amax(dim=(1, 2, 3), keepdim=True), torch.ones_like(images))
+        target_images /= torch.maximum(target_images.amax(dim=(1, 2, 3), keepdim=True), torch.ones_like(target_images))
+
+        images = images.transpose(1, 3).transpose(2, 3)
+        target_images = target_images.transpose(1, 3).transpose(2, 3)
+
+        for i in range(num_embs):            
+            # only display first item in batch for easier viewing
+            self.summary_writer.add_images("{} Embedding".format(i+1), images[:, i, :, :][:, None], epoch)
+            self.summary_writer.add_images("{} Target Embedding".format(i+1), target_images[:, i, :, :][:, None], epoch)
+    
+    
     def log_images(self, epoch, images, target_images, max_outputs=5):
         if not self.args.use_magnitude:
             images = torch.norm(images[:max_outputs], dim=1, keepdim=True)
@@ -198,8 +214,6 @@ class Trainer:
         self.summary_writer.add_embedding(embeddings, label_img=images, global_step=epoch, tag=tag)
 
         embeddings = embeddings[:10, :5][None, None]
-        self.summary_writer.add_images(tag, embeddings, epoch)
-        # self.summary_writer.add_histogram("{} histogram".format(tag), embeddings)
 
 if __name__ == '__main__':
     torch.backends.cudnn.benchmark = True
