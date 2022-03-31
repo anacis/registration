@@ -10,6 +10,7 @@ from momentum_model import MomentumModel
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
+import torch.nn.functional as F
 
 from network import SimpleNet
 
@@ -166,7 +167,7 @@ class Trainer:
             if epoch % 10 == 0:
                 self.save_model(epoch)
 
-    def log_embedding_images(self, epoch, images, target_images, max_outputs=1, num_embs=5):
+    def log_embedding_images(self, epoch, images, target_images, max_outputs=5, num_embs=5):
         images = images[:max_outputs]
         target_images = target_images[:max_outputs]
 
@@ -175,12 +176,19 @@ class Trainer:
 
         images = images.transpose(1, 3).transpose(2, 3)
         target_images = target_images.transpose(1, 3).transpose(2, 3)
-
+        
+        
         for i in range(num_embs):            
-            # only display first item in batch for easier viewing
-            self.summary_writer.add_images("{} Embedding".format(i+1), images[:, i, :, :][:, None], epoch)
-            self.summary_writer.add_images("{} Target Embedding".format(i+1), target_images[:, i, :, :][:, None], epoch)
-    
+            image_group = images[:, i, :, :][:, None].detach().cpu()
+            target_image_group = target_images[:, i, :, :][:, None].detach().cpu()
+            
+            shape = list(image_group.shape)
+            shape[2] = 2
+            ones = torch.ones(shape)
+            both = torch.cat([image_group, ones, target_image_group], dim=2)
+            padded = F.pad(both, (0,2,0,0), value=1)
+
+            self.summary_writer.add_images("{} Embedding Im1 Top and Im2 Bot".format(i+1), padded, epoch)    
     
     def log_images(self, epoch, images, target_images, max_outputs=5):
         if not self.args.use_magnitude:
