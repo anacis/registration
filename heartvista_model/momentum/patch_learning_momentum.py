@@ -136,7 +136,7 @@ class Trainer:
                 images = images.to(self.device)
                 target_images = target_images.to(self.device)
 
-                embeddings, target_embeddings = self.model(images, target_images)
+                embeddings, target_embeddings, target_im1_embeddings = self.model(images, target_images)
                 logits, labels = self.model.get_logits_labels(embeddings, target_embeddings)
                 loss = self.criterion(logits, labels)
 
@@ -145,6 +145,7 @@ class Trainer:
                 self.optimizer.step()
                 embeddings.detach()
                 target_embeddings.detach()
+                target_im1_embeddings.detach()
 
                 with torch.no_grad():
                     self.model.update_target_network()
@@ -155,8 +156,8 @@ class Trainer:
                 if first_step:
                     first_step = False
                     self.log_images(epoch, images, target_images)
-                    self.log_embedding_images(epoch, embeddings, target_embeddings)
-                    self.log_embeddings(epoch, images, embeddings, "embeddings")
+                    self.log_embedding_images(epoch, embeddings, target_im1_embeddings)
+                    self.log_embeddings(epoch, images, target_im1_embeddings, "embeddings")
                     self.log_embeddings(epoch, target_images, target_embeddings, "target_embeddings")
 
             loss = np.mean(losses)

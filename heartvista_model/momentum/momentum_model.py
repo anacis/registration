@@ -63,8 +63,9 @@ class MomentumModel(torch.nn.Module):
         embeddings = self.network(images1)[0].permute(0, 2, 3, 1)  # B, H, W, F (channels last)
         with torch.no_grad():
             target_embeddings = self.target_network(images2)[0].permute(0, 2, 3, 1).detach()
+            target_im1_embeddings = self.target_network(images1)[0].permute(0, 2, 3, 1).detach()
 
-        return embeddings, target_embeddings
+        return embeddings, target_embeddings, target_im1_embeddings
 
     def predict(self, images):
         with torch.no_grad():
