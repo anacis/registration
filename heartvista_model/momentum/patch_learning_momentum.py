@@ -220,6 +220,7 @@ class Trainer:
         embeddings = torch.stack([embeddings[s_n, s_x, s_y] for s_n, s_x, s_y in zip(index_n, index_x, index_y)], 0)
 
         self.summary_writer.add_embedding(embeddings, label_img=images, global_step=epoch, tag=tag)
+        self.summary.histogram(tag, embeddings)
 
         embeddings = embeddings[:10, :5][None, None]
 
