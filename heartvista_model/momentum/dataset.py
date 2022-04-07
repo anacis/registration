@@ -77,48 +77,22 @@ class UFData(Dataset):
         else:
             original_image = np.load(self.image_paths[index])[None]
         image = torch.from_numpy(original_image)
-        
-        if self.random_augmentation:
-            image = self.augment_image(image, augment_probability=0.9, jitter_probability=0.8, noise_probability=0.8,
-                      blur_probability=0.8, aliasing_probability=0)  # Model will be sensitive to this
-            
-            image2 = image
-            jitter_probability=0.8
-            noise_probability=0
-            blur_probability=0.8
-            aliasing_probability=0
-            if random.random() < jitter_probability:
-                image2 = self.random_jitter(image, max_brightness=0.8, max_contrast=0.8, max_saturation=0.8, max_hue=0.4)
-            if random.random() < blur_probability:
-                image2 = self.random_blur(image, max_sigma=2.0, kernel_size=5)
-            if random.random() < noise_probability:  # Noise and blur or blur and noise?
-                image2 = self.random_noise(image)
-            if random.random() < aliasing_probability:
-                image2 = self.random_aliasing(image)
 
-            # Different random changes to each if we want to be insensitive to it
+        if self.random_augmentation:
+            image = self.augment_image(image)  # Model will be sensitive to this
+            image2 = image
+            
             if self.magnitude:
-                image1 = torch.abs(image)  #TODO: check we have one channel
-                image2 = torch.abs(image2)
+                image1 = torch.abs(self.random_phase(image)).float()
+                image2 = torch.abs(self.random_phase(image2)).float()
             else:
                 image1 = self.complex2channels(self.random_phase(image))
                 image2 = self.complex2channels(self.random_phase(image2))
 
-            
-            top_clip1 = random.uniform(90, 100)
-            top_clip2 = random.uniform(90, 100)
-            image1 = torch.clamp(image1, max = np.percentile(image1, top_clip1))
-            image2 = torch.clamp(image2, max = np.percentile(image2, top_clip2))
-
-            bottom_clip1 = random.uniform(0, 5)
-            bottom_clip2 = random.uniform(0, 5)
-            image1 = torch.clamp(image1, min = np.percentile(image1, bottom_clip1))
-            image2 = torch.clamp(image2, min = np.percentile(image2, bottom_clip2))
-
             percent = random.uniform(90, 100)
             image1 = normalize(image1, percent)
             image2 = normalize(image2, percent)
-            
+    
             return image1, image2
 
         else:
@@ -136,6 +110,15 @@ class UFData(Dataset):
         # image = self.random_rotate(image)  # TODO: maybe?
         image = self.random_crop(image)
 
+        if random.random() < augment_probability:
+            if random.random() < jitter_probability:
+                image = self.random_jitter(image)
+            if random.random() < blur_probability:
+                image = self.random_blur(image)
+            if random.random() < noise_probability:  # Noise and blur or blur and noise?
+                image = self.random_noise(image)
+            if random.random() < aliasing_probability:
+                image = self.random_aliasing(image)
 
         # TODO
         #  Could also do some spiral stuff? with NUFFT
@@ -176,7 +159,7 @@ class UFData(Dataset):
         return image[:, offset[0]:stop[0], offset[1]:stop[1]]
 
     @staticmethod
-    def random_jitter(image, max_brightness=0.1, max_contrast=0.1, max_saturation=0.2, max_hue=0.1, max_gamma=0.1):
+    def random_jitter(image, max_brightness=0.1, max_hue=0.1, max_gamma=0.1):
         """
         TODO: adjust_contrast doesnt support grayscale (neither does adjust_saturation)
 
@@ -198,14 +181,6 @@ class UFData(Dataset):
         real = functional.adjust_brightness(real, brightness_param)
         imaginary = functional.adjust_brightness(imaginary, brightness_param)
 
-        contrast_param = random.uniform(1 - max_contrast, 1 + max_contrast)
-        real = functional.adjust_contrast(real, contrast_param)
-        imaginary = functional.adjust_contrast(imaginary, contrast_param)
-        
-        saturation_param = random.uniform(1 - max_saturation, 1 + max_saturation)
-        real = functional.adjust_saturation(real, saturation_param)
-        imaginary = functional.adjust_saturation(imaginary, saturation_param)
-   
         hue_param = random.uniform(- max_hue, max_hue)
         real = functional.adjust_hue(real, hue_param)
         imaginary = functional.adjust_hue(imaginary, hue_param)
@@ -213,7 +188,6 @@ class UFData(Dataset):
         gamma_param = random.uniform(1 - max_gamma, 1 + max_gamma)
         real = functional.adjust_gamma(real, gamma_param)
         imaginary = functional.adjust_gamma(imaginary, gamma_param)
-        
 
         return real + 1j * imaginary
 

@@ -194,7 +194,8 @@ class Trainer:
     def log_images(self, epoch, images, target_images, max_outputs=5):
         if not self.args.use_magnitude:
             images = torch.norm(images[:max_outputs], dim=1, keepdim=True)
-        
+            target_images = torch.norm(target_images[:max_outputs], dim=1, keepdim=True)
+
         images = images[:max_outputs]
         target_images = target_images[:max_outputs]
         images /= torch.maximum(images.amax(dim=(1, 2, 3), keepdim=True), torch.ones_like(images))
