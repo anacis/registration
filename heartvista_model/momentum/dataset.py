@@ -7,8 +7,11 @@ import torch
 from torch.utils.data import Dataset
 from torchvision.transforms import functional
 
-def normalize(img, percent=95):
-    return img/(np.percentile(img, percent) + 1e-12)
+def normalize(img, percent=0.95):
+    mag_quantile = torch.quantile(torch.abs(img), percent)
+    # print(f"mag quantile {mag_quantile}")
+    return img/(mag_quantile + 1e-12)
+
 
 class UFData(Dataset):
 
@@ -82,16 +85,23 @@ class UFData(Dataset):
             image = self.augment_image(image)  # Model will be sensitive to this
             image2 = image
             
+            #Augmentations we want to be insensitive to
+            image1 = self.random_phase(image)
+            image2 = self.random_phase(image2)
+            
             if self.magnitude:
-                image1 = torch.abs(self.random_phase(image)).float()
-                image2 = torch.abs(self.random_phase(image2)).float()
+                image1 = torch.abs(image).float()
+                image2 = torch.abs(image2).float()
             else:
-                image1 = self.complex2channels(self.random_phase(image))
-                image2 = self.complex2channels(self.random_phase(image2))
-
-            percent = random.uniform(90, 100)
-            image1 = normalize(image1, percent)
-            image2 = normalize(image2, percent)
+                image1 = self.complex2channels(image)
+                image2 = self.complex2channels(image2)
+            
+            # percent = (torch.rand(1)*0.1 +0.9).item()
+            #@Alfredo - uncomment this portion  to try running with normalization
+            # percent=0.95
+            # # print(f"percent {percent}")
+            # image1 = normalize(image1, percent)
+            # image2 = normalize(image2, percent)
     
             return image1, image2
 
@@ -117,8 +127,8 @@ class UFData(Dataset):
                 image = self.random_blur(image)
             if random.random() < noise_probability:  # Noise and blur or blur and noise?
                 image = self.random_noise(image)
-            if random.random() < aliasing_probability:
-                image = self.random_aliasing(image)
+            # if random.random() < aliasing_probability:  #Commented out aliasing for now
+            #     image = self.random_aliasing(image)
 
         # TODO
         #  Could also do some spiral stuff? with NUFFT
