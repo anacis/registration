@@ -249,7 +249,7 @@ if __name__ == '__main__':
 
     with torch.no_grad():
         for images in tqdm(dataloader, "Batch"):
-            for image in images:  # image1 and image2 with different augmentations
+            for image in images[:1]:  # image1 and image2 with different augmentations
                 image = image.to(device)
                 embeddings = ksnet(image)[0]
                 for reference in reference_embeddings:

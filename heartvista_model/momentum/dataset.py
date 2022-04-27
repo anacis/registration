@@ -8,9 +8,10 @@ from torch.utils.data import Dataset
 from torchvision.transforms import functional
 
 def normalize(img, percent=0.95):
-    mag_quantile = torch.quantile(torch.abs(img), percent)
+    mag_quantile = torch.quantile(torch.norm(img, dim=0), percent)
     # print(f"mag quantile {mag_quantile}")
-    return img/(mag_quantile + 1e-12)
+    return img/(mag_quantile + 1e-7)
+    # return img / 1.0
 
 
 class UFData(Dataset):
@@ -84,9 +85,24 @@ class UFData(Dataset):
         if self.random_augmentation:
             image = self.augment_image(image)  # Model will be sensitive to this
             image2 = image
-            
+
             #Augmentations we want to be insensitive to
-            image1 = self.random_phase(image)
+            augment_probability=0.9
+            jitter_probability=0.8
+            noise_probability=0.8
+            blur_probability=0.8
+
+            if random.random() < augment_probability:
+                if random.random() < jitter_probability:
+                    image = self.random_jitter(image)
+                if random.random() < jitter_probability:
+                    image2 = self.random_jitter(image2)
+                if random.random() < blur_probability:
+                    image = self.random_blur(image)
+                if random.random() < blur_probability:
+                    image2 = self.random_blur(image2)
+
+            image = self.random_phase(image)
             image2 = self.random_phase(image2)
             
             if self.magnitude:
@@ -98,10 +114,10 @@ class UFData(Dataset):
             
             # percent = (torch.rand(1)*0.1 +0.9).item()
             #@Alfredo - uncomment this portion  to try running with normalization
-            # percent=0.95
+            percent=0.99
             # # print(f"percent {percent}")
-            # image1 = normalize(image1, percent)
-            # image2 = normalize(image2, percent)
+            image1 = normalize(image1, percent)
+            image2 = normalize(image2, percent)
     
             return image1, image2
 
@@ -120,13 +136,13 @@ class UFData(Dataset):
         # image = self.random_rotate(image)  # TODO: maybe?
         image = self.random_crop(image)
 
-        if random.random() < augment_probability:
-            if random.random() < jitter_probability:
-                image = self.random_jitter(image)
-            if random.random() < blur_probability:
-                image = self.random_blur(image)
-            if random.random() < noise_probability:  # Noise and blur or blur and noise?
-                image = self.random_noise(image)
+        # if random.random() < augment_probability:
+        #     if random.random() < jitter_probability:
+        #         image = self.random_jitter(image)
+        #     if random.random() < blur_probability:
+        #         image = self.random_blur(image)
+            # if random.random() < noise_probability:  # Noise and blur or blur and noise?
+            #     image = self.random_noise(image)
             # if random.random() < aliasing_probability:  #Commented out aliasing for now
             #     image = self.random_aliasing(image)
 
