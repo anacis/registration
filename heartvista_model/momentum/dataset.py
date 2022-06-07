@@ -87,20 +87,20 @@ class UFData(Dataset):
             image2 = image
 
             #Augmentations we want to be insensitive to
-            augment_probability=0.9
-            jitter_probability=0.8
-            noise_probability=0.8
-            blur_probability=0.8
+            # augment_probability=0.9
+            # jitter_probability=0.8
+            # noise_probability=0.8
+            # blur_probability=0.8
 
-            if random.random() < augment_probability:
-                if random.random() < jitter_probability:
-                    image = self.random_jitter(image)
-                if random.random() < jitter_probability:
-                    image2 = self.random_jitter(image2)
-                if random.random() < blur_probability:
-                    image = self.random_blur(image)
-                if random.random() < blur_probability:
-                    image2 = self.random_blur(image2)
+            # if random.random() < augment_probability:
+            #     if random.random() < jitter_probability:
+            #         image = self.random_jitter(image)
+            #     if random.random() < jitter_probability:
+            #         image2 = self.random_jitter(image2)
+            #     if random.random() < blur_probability:
+            #         image = self.random_blur(image)
+            #     if random.random() < blur_probability:
+            #         image2 = self.random_blur(image2)
 
             image = self.random_phase(image)
             image2 = self.random_phase(image2)
@@ -136,11 +136,11 @@ class UFData(Dataset):
         # image = self.random_rotate(image)  # TODO: maybe?
         image = self.random_crop(image)
 
-        # if random.random() < augment_probability:
-        #     if random.random() < jitter_probability:
-        #         image = self.random_jitter(image)
-        #     if random.random() < blur_probability:
-        #         image = self.random_blur(image)
+        if random.random() < augment_probability:
+            if random.random() < jitter_probability:
+                image = self.random_jitter(image)
+            if random.random() < blur_probability:
+                image = self.random_blur(image)
             # if random.random() < noise_probability:  # Noise and blur or blur and noise?
             #     image = self.random_noise(image)
             # if random.random() < aliasing_probability:  #Commented out aliasing for now

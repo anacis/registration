@@ -85,13 +85,27 @@ class EmbeddingsTopK:
 
     def push_batch(self, batch_embeddings, batch_images):
         batch_size, feature_dim, rows, cols = batch_embeddings.shape
+        #TODO: inspect what self.embedding and batch embeddings and batch scores looks like
+        #(also distribution)
         batch_scores = torch.sum(self.embedding[None, :, None, None] * batch_embeddings, dim=1)
+        # for i, batch in enumerate(batch_scores):
+        #     plt.figure()
+        #     plt.imshow(batch.detach().cpu())
+        #     plt.savefig(os.path.join(save_dir, f"batch_{i}.png"))
+
+        batch0 = batch_embeddings[:, 0, 0, 0]
+        batch1 =  batch_embeddings[0, :, 0, 0]
+        batch2 =  batch_embeddings[0, 0, :, 0]
+        batch3 =  batch_embeddings[0, 0, 0, :]
+        
         dropout = 0.0
         if dropout:
             # Add some random sampling to avoid getting many images from same patient and area
             # Keep something like 50% of the patches (however, we will get different results every time)
             batch_scores = dropout * torch.nn.functional.dropout(batch_scores, p=dropout, inplace=True)
         batch_images = batch_images.norm(dim=1)  # Complex to Abs
+
+        # view = torch.topk(batch_scores.view(-1), self.max_to_keep)
 
         for value, index in zip(*torch.topk(batch_scores.view(-1), self.max_to_keep)):
             image_index = index // (rows * cols)
@@ -133,10 +147,10 @@ class EmbeddingsTopK:
         patches = np.concatenate([normalize_numpy(np.abs(item[1])) for item in sorted_heap], axis=1)
         
         white_line = np.ones_like(self.patch)[:, :4] * patches.max()
-        patches = np.concatenate([self.patch, white_line, patches], axis=1)
+        patches = np.concatenate([normalize_numpy(np.abs(self.patch)), white_line, patches], axis=1)
 
         plt.imshow(patches, interpolation="lanczos", cmap="gray", vmin=0, vmax=1)
-        plt.title("              " + "     ".join([f"{-item[0]:.3f}" for item in sorted_heap]))
+        plt.title("              " + "     ".join([f"{-item[0]:.4f}" for item in sorted_heap]))
         plt.axis("off")
 
 
@@ -178,6 +192,7 @@ if __name__ == '__main__':
 
     save_dir = os.path.join(args.logdir, "results")
     os.makedirs(save_dir, exist_ok=True)
+
 
     # Get corresponding embeddings of patches we want. Convert to admissible centers given the network.
     # jump = reference_image.shape[-2] / (all_reference_embeddings.shape[-2] + 1)
