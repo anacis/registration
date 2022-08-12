@@ -54,6 +54,8 @@ def get_args():
                            " Otherwise, latest checkpoint (if any) will be used")
     parser.add_option('--fastmri', action="store_true", default=False,
                       help='If specified, use fastmri settings.')
+    parser.add_option('-n', '--norm', default=1e-4, type='float',
+                      help='normalization percentile')
 
     (options, args) = parser.parse_args()
     return options
@@ -72,7 +74,7 @@ class Trainer:
         os.makedirs(self.checkpoint_directory, exist_ok=True)
 
         self.dataset = UFData(self.args.datadir, magnitude=bool(self.args.use_magnitude), device=self.device,
-                              fastmri=self.args.fastmri, random_augmentation=True)
+                              fastmri=self.args.fastmri, random_augmentation=True, normalization=self.args.norm)
         self.dataloader = DataLoader(self.dataset, self.args.batchsize, shuffle=True, drop_last=True,
                                      num_workers=self.args.batchsize)
 

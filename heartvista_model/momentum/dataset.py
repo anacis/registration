@@ -17,7 +17,7 @@ def normalize(img, percent=0.95):
 class UFData(Dataset):
 
     def __init__(self, data_directory, max_offset=None, magnitude=False, device=torch.device('cpu'),
-                 fastmri=False, random_augmentation=True):
+                 fastmri=False, random_augmentation=True, normalization=0.99):
         """
 
         Parameters
@@ -49,6 +49,7 @@ class UFData(Dataset):
         self.device = device
         self.magnitude = magnitude
         self.random_augmentation = random_augmentation
+        self.normalization = normalization
 
         if fastmri:  # Fast MRI Dataset:
             self.cropped_image_size = np.array([640, 320]) - max_offset
@@ -114,7 +115,7 @@ class UFData(Dataset):
             
             # percent = (torch.rand(1)*0.1 +0.9).item()
             #@Alfredo - uncomment this portion  to try running with normalization
-            percent=0.99
+            percent=self.normalization 
             # # print(f"percent {percent}")
             image1 = normalize(image1, percent)
             image2 = normalize(image2, percent)
