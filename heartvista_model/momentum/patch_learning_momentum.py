@@ -1,7 +1,10 @@
 import os
 import re
 from glob import glob
-from optparse import OptionParser
+from argparse import ArgumentParser, Namespace
+from datetime import datetime
+import json
+import subprocess
 
 import numpy as np
 import torch
@@ -22,49 +25,50 @@ from network import SimpleNet
 
 
 def get_args():
-    parser = OptionParser()
-    parser.add_option('--datadir', "--dd",
+    parser = ArgumentParser()
+    parser.add_argument('--datadir', "--dd",
                       help='Directory contains 2D images.')
-    parser.add_option("-g", '--gpu_id', dest="gpu_id", type='int',
+    parser.add_argument("-g", '--gpu_id', type=int,
                       help='GPU number, default is None (-g 0 means use gpu 0)')
-    parser.add_option('--logdir', "--ld",
+    parser.add_argument('--logdir', "--ld",
                       help='Directory for saving logs and checkpoints')
-    parser.add_option('-f', '--features', default=128, type='int',
+    parser.add_argument('-f', '--features', default=128, type=int,
                       help='Dimension of the feature space.')
-    parser.add_option('--learning-rate', '--lr', default=1e-4, type='float',
+    parser.add_argument('--learning-rate', '--lr', default=1e-4, type=float,
                       help='learning rate for the model')
-    parser.add_option('--temperature', '--temp', default=1.00, type=float,
+    parser.add_argument('--temperature', '--temp', default=1.00, type=float,
                       help='temperature parameter default: 1')
-    parser.add_option('--momentum', default=0.999, type=float,
+    parser.add_argument('--momentum', default=0.999, type=float,
                       help='Momentum for target network.')
-    parser.add_option('--batchsize', '--bs', dest='batchsize',
-                      default=32, type='int', help='batch size for training')
-    parser.add_option('-e', '--epochs', default=200, type='int',
+    parser.add_argument('--batchsize', '--bs', dest='batchsize',
+                      default=32, type=int, help='batch size for training')
+    parser.add_argument('-e', '--epochs', default=200, type=int,
                       help='Number of epochs to train')
-    # parser.add_option('-m', '--model', dest='model',
+    # parser.add_argument('-m', '--model', dest='model',
     #                   default=False, help='load checkpoints')
-    parser.add_option('--use_magnitude', action="store_true", default=False,
+    parser.add_argument('--use_magnitude', action="store_true", default=False,
                       help='If specified, use image magnitude.')
-    # parser.add_option('-x', '--sx', dest='sx',
+    # parser.add_argument('-x', '--sx', dest='sx',
     #                   default=256, type='int', help='image dim: x')
-    # parser.add_option('-y', '--sy', dest='sy',
+    # parser.add_argument('-y', '--sy', dest='sy',
     #                   default=320, type='int', help='image dim: y')
-    parser.add_option('--force_train_from_scratch', '--overwrite', action="store_true",
+    parser.add_argument('--force_train_from_scratch', '--overwrite', action="store_true",
                       help="If specified, training will start from scratch."
                            " Otherwise, latest checkpoint (if any) will be used")
-    parser.add_option('--fastmri', action="store_true", default=False,
+    parser.add_argument('--fastmri', action="store_true", default=False,
                       help='If specified, use fastmri settings.')
-    parser.add_option('-n', '--norm', default=1e-4, type='float',
+    parser.add_argument('-n', '--norm', default=1e-4, type=float,
                       help='normalization percentile')
 
-    (options, args) = parser.parse_args()
-    return options
+    parser_arguments = parser.parse_args()
+    return parser_arguments
 
 
 class Trainer:
 
     def __init__(self):
 
+        #TODO: if this model already exists, load previous training arguments
         self.args = get_args()
         self.device = torch.device(f"cuda:{self.args.gpu_id}")
         print("Using device:", self.device)
@@ -91,6 +95,9 @@ class Trainer:
             self.restore_model()
         else:
             input("Training from scratch. Are you sure? (Ctrl+C to kill):")
+
+        # # Save command line arguments and other parameters for this run
+        # self.save_train_parameters(self.args)
 
     def restore_model(self):
         """Restore latest model checkpoint (if any) and continue training from there."""
@@ -125,6 +132,36 @@ class Trainer:
             "optimizer_dict": self.optimizer.state_dict()
         }, os.path.join(self.checkpoint_directory, 'ckpt{}.pth'.format(epoch)))
 
+    def save_train_parameters(self, arguments):
+        """Save training and network parameters for run.
+        Parameters
+        ----------
+        arguments : Namespace
+            The command line arguments for the current run.
+        """
+        params_dict = vars(arguments)
+        timestamp = datetime.now().strftime("%m-%d-%Y_%H-%M-%S")
+        params_dict["date_time"] = timestamp
+        params_dict["commit_hash"] = subprocess.check_output(['git', 'log', '-1',
+                                                              '--pretty=format:"%H"']).decode().strip('"')
+        params_dict["branch"] = subprocess.check_output(['git', 'branch']).decode().split("*")[1].split()[0]
+        params_dict["start_epoch"] = self.start_epoch
+
+        with open(os.path.join(arguments.logdir, f"params_{timestamp}.json"), "w") as _file:
+            json.dump(params_dict, _file, indent=4)
+    
+    @staticmethod
+    def load_train_parameters(arguments):
+        """Restore arguments from last saved json file"""
+        params_paths = sorted(glob(os.path.join(arguments.logdir, "params_*")))
+        if not len(params_paths):
+            raise RuntimeError("Tried to load parameters (to evaluate), but no params file was found!")
+        params = Namespace(**{**vars(arguments), **json.load(open(params_paths[-1], "r"))})
+        params.logdir = arguments.logdir
+        params.gpu_id = arguments.gpu_id
+        params.num_workers = arguments.num_workers
+        return params
+    
     def train(self):
         """Train the model!"""
 
