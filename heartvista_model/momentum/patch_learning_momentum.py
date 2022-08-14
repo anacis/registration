@@ -57,7 +57,7 @@ def get_args():
                            " Otherwise, latest checkpoint (if any) will be used")
     parser.add_argument('--fastmri', action="store_true", default=False,
                       help='If specified, use fastmri settings.')
-    parser.add_argument('-n', '--norm', default=1e-4, type=float,
+    parser.add_argument('--norm', default=0.95, type=float,
                       help='normalization percentile')
 
     parser_arguments = parser.parse_args()
@@ -68,8 +68,19 @@ class Trainer:
 
     def __init__(self):
 
-        #TODO: if this model already exists, load previous training arguments
         self.args = get_args()
+
+        #Check if a param file already exists
+        params_dir = os.path.join(self.args.logdir, "params")
+        if os.path.isdir(params_dir):
+            print("Params dir exists")
+            params_paths = sorted(glob(os.path.join(params_dir, "params_*")))
+            if len(params_paths) > 0:
+                print("Existing Arguments")
+                self.args = self.load_train_parameters(self.args)
+
+        print(f"log dir {self.args.logdir}")
+
         self.device = torch.device(f"cuda:{self.args.gpu_id}")
         print("Using device:", self.device)
         print("Using magnitude:", self.args.use_magnitude)
@@ -96,8 +107,8 @@ class Trainer:
         else:
             input("Training from scratch. Are you sure? (Ctrl+C to kill):")
 
-        # # Save command line arguments and other parameters for this run
-        # self.save_train_parameters(self.args)
+        # Save command line arguments and other parameters for this run
+        self.save_train_parameters(self.args)
 
     def restore_model(self):
         """Restore latest model checkpoint (if any) and continue training from there."""
@@ -147,19 +158,24 @@ class Trainer:
         params_dict["branch"] = subprocess.check_output(['git', 'branch']).decode().split("*")[1].split()[0]
         params_dict["start_epoch"] = self.start_epoch
 
-        with open(os.path.join(arguments.logdir, f"params_{timestamp}.json"), "w") as _file:
+        params_dir = os.path.join(arguments.logdir, "params")
+        if not os.path.isdir(params_dir):
+            print("No params dir exists, making a params dir")
+            os.mkdir(params_dir)
+        with open(os.path.join(params_dir, f"params_{timestamp}.json"), "w") as _file:
             json.dump(params_dict, _file, indent=4)
     
     @staticmethod
     def load_train_parameters(arguments):
         """Restore arguments from last saved json file"""
-        params_paths = sorted(glob(os.path.join(arguments.logdir, "params_*")))
+        params_dir = os.path.join(arguments.logdir, "params")
+        params_paths = sorted(glob(os.path.join(params_dir, "params_*")))
         if not len(params_paths):
             raise RuntimeError("Tried to load parameters (to evaluate), but no params file was found!")
         params = Namespace(**{**vars(arguments), **json.load(open(params_paths[-1], "r"))})
         params.logdir = arguments.logdir
         params.gpu_id = arguments.gpu_id
-        params.num_workers = arguments.num_workers
+        params.force_train_from_scratch = arguments.force_train_from_scratch
         return params
     
     def train(self):

@@ -3,9 +3,10 @@
 import heapq
 import os.path
 import re
+import json
 from glob import glob
 from operator import itemgetter
-from optparse import OptionParser
+from argparse import ArgumentParser, Namespace
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,31 +20,45 @@ from network import SimpleNet
 
 
 def get_args():
-    parser = OptionParser()
-    parser.add_option('--datadir', "--dd",
+    parser = ArgumentParser()
+    parser.add_argument('--datadir', "--dd",
                       help='Directory contains 2D images.')
-    parser.add_option('--logdir', type=str,
+    parser.add_argument('--logdir', type=str,
                       help='The directory containing the model checkpoints')
-    parser.add_option('-i', '--checkpoint', dest='checkpoint',
+    parser.add_argument('-i', '--checkpoint', dest='checkpoint',
                       help='Specific checkpoint to load')
-    # parser.add_option('--force_rebuild_memory', action="store_true", default=False,
+    # parser.add_argument('--force_rebuild_memory', action="store_true", default=False,
     #                   help='The path to store (or load) the memory bank.')
-    # parser.add_option('--ip', '--inputpatch', dest='inputpatch', default=False,
+    # parser.add_argument('--ip', '--inputpatch', dest='inputpatch', default=False,
     #                   help='inputpatch')
-    # parser.add_option('-f', '--features', dest='features',
+    # parser.add_argument('-f', '--features', dest='features',
     #                   default=128, type='int', help='Features for the training (default 128)')
-    # parser.add_option('-p', '--patch', dest='patch',
+    # parser.add_argument('-p', '--patch', dest='patch',
     #                   default=20, type='int', help='Patch number for a single image (default 20)')
-    parser.add_option('-n', '--neighbors', dest='neighbors',
-                      default=20, type='int', help='neighbors to visualize')
-    parser.add_option('-g', '--gpu', dest='gpu', type='int',
+    parser.add_argument('-n', '--neighbors', dest='neighbors',
+                      default=20, type=int, help='neighbors to visualize')
+    parser.add_argument('-g', '--gpu_id', type=int,
                       help='use cuda')
-    parser.add_option('--fastmri',  action='store_true', default=False, help='Test on Knee FastMRI dataset')
-    # parser.add_option('--save', dest='save', action="store_true", help='save')
-    parser.add_option('--magnitude',  action='store_true', default=False, help='Test on magnitude of data only')
+    parser.add_argument('--fastmri',  action='store_true', default=False, help='Test on Knee FastMRI dataset')
+    # parser.add_argument('--save', dest='save', action="store_true", help='save')
+    parser.add_argument('--use_magnitude',  action='store_true', default=False, help='Test on magnitude of data only')
+    parser.add_argument('--norm', default=0.95, type=float,
+                      help='normalization percentile')
 
-    (options, args) = parser.parse_args()
-    return options
+    parser_arguments = parser.parse_args()
+    return parser_arguments
+
+def load_train_parameters(arguments):
+    """Restore arguments from last saved json file"""
+    params_dir = os.path.join(arguments.logdir, "params")
+    params_paths = sorted(glob(os.path.join(params_dir, "params_*")))
+    if not len(params_paths):
+        raise RuntimeError("Tried to load parameters (to evaluate), but no params file was found!")
+    params = Namespace(**{**vars(arguments), **json.load(open(params_paths[-1], "r"))})
+    params.logdir = arguments.logdir
+    params.gpu_id = arguments.gpu_id
+    params.checkpoint = arguments.checkpoint
+    return params
 
 
 def complex2channels(image, dim=0):
@@ -153,13 +168,21 @@ class EmbeddingsTopK:
         plt.title("              " + "     ".join([f"{-item[0]:.4f}" for item in sorted_heap]))
         plt.axis("off")
 
-
 if __name__ == '__main__':
     torch.backends.cudnn.benchmark = True
     args = get_args()
+    #Check if a param file already exists
+    if not args.logdir:
+        raise RuntimeError("Need to specify a log directory")
+    params_dir = os.path.join(args.logdir, "params")
+    params_paths = sorted(glob(os.path.join(params_dir, "params_*")))
+    if len(params_paths) > 0:
+        print("Existing Arguments")
+        args = load_train_parameters(args)
 
-    device = torch.device(f'cuda:{args.gpu}' if args.gpu is not None else 'cpu')
-    # device = torch.device('cpu')
+    print(f"Existing Args: {args}")
+
+    device = torch.device(f'cuda:{args.gpu_id}' if args.gpu_id is not None else 'cpu')
 
     if not args.checkpoint:
         checkpoint = sorted(glob(os.path.join(args.logdir, 'checkpoints/*')),
@@ -168,7 +191,7 @@ if __name__ == '__main__':
         checkpoint = args.checkpoint
 
     checkpoint_number = re.match(".*[a-z]+(\d+).pth", checkpoint).group(1)
-    ksnet = MomentumModel(SimpleNet, magnitude=args.magnitude)
+    ksnet = MomentumModel(SimpleNet, magnitude=args.use_magnitude)
     # ksnet = SimpleResNet()
 
     random_weights = False
@@ -201,7 +224,7 @@ if __name__ == '__main__':
     # start = jump
 
     # Run every image on the dataset, find the closest embeddings to each reference patch embeddings and keep the top 20
-    dataset = UFData(args.datadir, max_offset=(0, 0), magnitude=args.magnitude, device=device, fastmri=args.fastmri)
+    dataset = UFData(args.datadir, max_offset=(0, 0), magnitude=args.use_magnitude, device=device, fastmri=args.fastmri, normalization=args.norm)
     dataloader = DataLoader(dataset, batch_size=30, shuffle=False, num_workers=20)
 
     start, jump = 23, 8
@@ -234,7 +257,7 @@ if __name__ == '__main__':
         reference_image = np.load(input_path)
         reference_image_tensor = torch.from_numpy(reference_image[None])
 
-        if args.magnitude:
+        if args.use_magnitude:
             reference_image_tensor = torch.tensor(np.abs(reference_image),
                                               dtype=torch.float).to(device)[None, None]
         else:
