@@ -44,6 +44,8 @@ def get_args():
     parser.add_argument('--use_magnitude',  action='store_true', default=False, help='Test on magnitude of data only')
     parser.add_argument('--norm', default=0.95, type=float,
                       help='normalization percentile')
+    parser.add_argument('--temperature', '--temp', default=1.00, type=float,
+                      help='temperature parameter default: 1')
 
     parser_arguments = parser.parse_args()
     return parser_arguments
@@ -185,13 +187,14 @@ if __name__ == '__main__':
     device = torch.device(f'cuda:{args.gpu_id}' if args.gpu_id is not None else 'cpu')
 
     if not args.checkpoint:
+        print(os.path.join(args.logdir, 'checkpoints/*'))
         checkpoint = sorted(glob(os.path.join(args.logdir, 'checkpoints/*')),
                             key=lambda x: int(re.match(".*[a-z]+(\d+).pth", x).group(1)))[-1]
     else:
         checkpoint = args.checkpoint
 
     checkpoint_number = re.match(".*[a-z]+(\d+).pth", checkpoint).group(1)
-    ksnet = MomentumModel(SimpleNet, magnitude=args.use_magnitude)
+    ksnet = MomentumModel(SimpleNet, magnitude=args.use_magnitude, temperature=args.temperature)
     # ksnet = SimpleResNet()
 
     random_weights = False
