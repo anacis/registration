@@ -88,21 +88,27 @@ class UFData(Dataset):
             image2 = image
 
             #Augmentations we want to be insensitive to
-            # augment_probability=0.9
-            # jitter_probability=0.8
+            augment_probability= 0
+            jitter_probability= 0.9
             # noise_probability=0.8
-            # blur_probability=0.8
+            blur_probability= 0.9
+            invert_probability = 0.9
 
-            # if random.random() < augment_probability:
-            #     if random.random() < jitter_probability:
-            #         image = self.random_jitter(image)
-            #     if random.random() < jitter_probability:
-            #         image2 = self.random_jitter(image2)
-            #     if random.random() < blur_probability:
-            #         image = self.random_blur(image)
-            #     if random.random() < blur_probability:
-            #         image2 = self.random_blur(image2)
-
+            if random.random() < augment_probability:
+                # if random.random() < jitter_probability:
+                #     image = self.random_jitter(image)
+                # if random.random() < jitter_probability:
+                #     image2 = self.random_jitter(image2)
+                if random.random() < blur_probability:
+                    image = self.random_blur(image)
+                if random.random() < blur_probability:
+                    image2 = self.random_blur(image2)
+                if random.random() < invert_probability:
+                    if random.random() < 0.5:
+                        image = self.random_invert(image)
+                    else:
+                        image2 = self.random_invert(image2)
+                
             image = self.random_phase(image)
             image2 = self.random_phase(image2)
             
@@ -186,7 +192,7 @@ class UFData(Dataset):
         return image[:, offset[0]:stop[0], offset[1]:stop[1]]
 
     @staticmethod
-    def random_jitter(image, max_brightness=0.1, max_hue=0.1, max_gamma=0.1):
+    def random_jitter(image, max_brightness=0, max_gamma=0, max_hue=0, max_saturation=0.9):
         """
         TODO: adjust_contrast doesnt support grayscale (neither does adjust_saturation)
 
@@ -208,13 +214,18 @@ class UFData(Dataset):
         real = functional.adjust_brightness(real, brightness_param)
         imaginary = functional.adjust_brightness(imaginary, brightness_param)
 
-        hue_param = random.uniform(- max_hue, max_hue)
-        real = functional.adjust_hue(real, hue_param)
-        imaginary = functional.adjust_hue(imaginary, hue_param)
-
         gamma_param = random.uniform(1 - max_gamma, 1 + max_gamma)
         real = functional.adjust_gamma(real, gamma_param)
         imaginary = functional.adjust_gamma(imaginary, gamma_param)
+
+        # These color jitter augmentations don't make sense for grayscale - uncomment them if you are using color images
+        # hue_param = random.uniform(- max_hue, max_hue)
+        # real = functional.adjust_hue(real, hue_param)
+        # imaginary = functional.adjust_hue(imaginary, hue_param)
+
+        # saturation_param = random.uniform(1 - max_saturation, 1 + max_saturation)
+        # real = functional.adjust_saturation(real, saturation_param)
+        # imaginary = functional.adjust_saturation(imaginary, saturation_param)
 
         return real + 1j * imaginary
 
@@ -230,6 +241,13 @@ class UFData(Dataset):
         imaginary = functional.gaussian_blur(image.imag, kernel_size, blur_param)
         return real + 1j * imaginary
 
+    @staticmethod
+    def random_invert(image):
+        real, imaginary = image.real, image.imag
+        real = functional.invert(real)
+        imaginary = functional.invert(imaginary)
+        return real + 1j * imaginary    
+    
     @staticmethod
     def random_aliasing(image, max_acceleration=6, center_fraction_range=(0.08, 0.16)):
         # plt.imshow(image[0].abs(), cmap="gray")
