@@ -7,12 +7,14 @@ import torch
 from torch.utils.data import Dataset
 from torchvision.transforms import functional
 
-def normalize(img, percent=0.95):
-    mag_quantile = torch.quantile(torch.norm(img, dim=0), percent)
-    # print(f"mag quantile {mag_quantile}")
-    return img/(mag_quantile + 1e-7)
+def normalize(img, low=0.01, high=0.99):
+    high_quantile = torch.quantile(img, high)
+    low_quantile = torch.quantile(img, low)
+    return (img-low_quantile)/(high_quantile - low_quantile + 1e-7)
     # return img / 1.0
 
+def minmaxnorm(img):
+    return (img-img.min())/(img.max()-img.min())
 
 class UFData(Dataset):
 
@@ -85,6 +87,11 @@ class UFData(Dataset):
 
         if self.random_augmentation:
             image = self.augment_image(image)  # Model will be sensitive to this
+            
+            if self.magnitude:
+                image = torch.abs(image).float()
+                image = minmaxnorm(image)
+            
             image2 = image
 
             #Augmentations we want to be insensitive to
@@ -112,19 +119,12 @@ class UFData(Dataset):
             image = self.random_phase(image)
             image2 = self.random_phase(image2)
             
-            if self.magnitude:
-                image1 = torch.abs(image).float()
-                image2 = torch.abs(image2).float()
-            else:
+            if not self.magnitude:
                 image1 = self.complex2channels(image)
                 image2 = self.complex2channels(image2)
             
-            # percent = (torch.rand(1)*0.1 +0.9).item()
-            #@Alfredo - uncomment this portion  to try running with normalization
-            percent=self.normalization 
-            # # print(f"percent {percent}")
-            image1 = normalize(image1, percent)
-            image2 = normalize(image2, percent)
+            image1 = normalize(image1)
+            image2 = normalize(image2)
     
             return image1, image2
 
