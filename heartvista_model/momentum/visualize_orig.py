@@ -11,7 +11,7 @@ from argparse import ArgumentParser, Namespace
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from dataset import UFData, normalize
+from dataset import UFData, normalize, minmaxnorm
 from momentum_model import MomentumModel
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -269,9 +269,9 @@ if __name__ == '__main__':
             # reference_image_tensor = torch.tensor(np.stack((reference_image.real, reference_image.imag), 0),
             #                                   dtype=torch.float).to(device)[None]
         
-         # percent = (torch.rand(1)*0.1 +0.9).item()
-        percent=0.95
-        # print(f"percent {percent}")
+        
+        reference_image_tensor = minmaxnorm(reference_image_tensor)
+        percent=args.norm
         reference_image_tensor = normalize(reference_image_tensor, percent)
         reference_image_tensor = reference_image_tensor.to(device)
         
