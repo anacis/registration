@@ -255,7 +255,8 @@ if __name__ == '__main__':
     centers_y = np.arange(start, reference_image_size[-1], jump)
 
     reference_embeddings = []
-    for input_path in input_paths:
+    reference_embeddings_2 = [] #second plot comparing references against themselves and against their augmentations
+    for i, input_path in enumerate(input_paths):
 
         reference_image = np.load(input_path)
         reference_image_tensor = torch.from_numpy(reference_image[None])
@@ -266,27 +267,26 @@ if __name__ == '__main__':
         else:
             reference_image_tensor = complex2channels(reference_image_tensor)[None]
             
-            # reference_image_tensor = torch.tensor(np.stack((reference_image.real, reference_image.imag), 0),
-            #                                   dtype=torch.float).to(device)[None]
-        
-         # percent = (torch.rand(1)*0.1 +0.9).item()
-        percent=0.95
-        # print(f"percent {percent}")
+        #TODO: we should automatically apply the preprocessing to the reference image
+        percent= args.norm
         reference_image_tensor = normalize(reference_image_tensor, percent)
         reference_image_tensor = reference_image_tensor.to(device)
         
         all_reference_embeddings = ksnet(reference_image_tensor)[0].squeeze(0)
 
-        for patch_center in np.array(patch_centers):
+        for j, patch_center in enumerate(np.array(patch_centers)):
             embedding_indices = np.round((patch_center - start) / jump).astype(np.int32)
             embedding = all_reference_embeddings[:, embedding_indices[0], embedding_indices[1]]
 
             # Have a set/heap of patches with scores for each reference patch
             reference_embeddings.append(EmbeddingsTopK(embedding, reference_image, embedding_indices,
                                                        centers_x, centers_y))
-
-    all_embeddings = []
-    all_images = []
+            reference_embeddings_2.append(EmbeddingsTopK(embedding, reference_image, embedding_indices,
+                                                       centers_x, centers_y))
+            #if we are looking at the first image, append it a second time for plot 2
+            if i == 0 and j == 0:
+                reference_embeddings_2.append(EmbeddingsTopK(embedding, reference_image, embedding_indices,
+                                                       centers_x, centers_y))
 
     with torch.no_grad():
         for images in tqdm(dataloader, "Batch"):
@@ -298,6 +298,16 @@ if __name__ == '__main__':
                     embeddings.detach()
                     image.detach()
 
+        #compare all the reference embeddings to each other
+        main_reference = reference_embeddings[0]
+        embeddings = []
+        images = [] 
+        for reference in reference_embeddings_2[1:]:
+            embeddings.append(reference.embedding)
+            images.append(reference.patch)
+        main_reference.push_patch(embeddings, images)
+
+    
     num_references = len(reference_embeddings)
     plt.figure(figsize=(15, 1.3 * num_references))
     for index, reference in enumerate(reference_embeddings):
@@ -312,3 +322,7 @@ if __name__ == '__main__':
         filename = f"{filename}_fastmri"
     plt.savefig(os.path.join(save_dir, f"{filename}.png"))
     plt.show()
+
+
+
+
