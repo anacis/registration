@@ -92,10 +92,10 @@ class UFData(Dataset):
                 image = torch.abs(image).float()
                 image = minmaxnorm(image)
             
-            image2 = image
+            image2 = torch.clone(image)
 
             #Augmentations we want to be insensitive to
-            augment_probability= 0
+            augment_probability= 0.9
             jitter_probability= 0.9
             # noise_probability=0.8
             blur_probability= 0.9
@@ -115,16 +115,18 @@ class UFData(Dataset):
                         image = self.random_invert(image)
                     else:
                         image2 = self.random_invert(image2)
-                
+
             image = self.random_phase(image)
             image2 = self.random_phase(image2)
             
-            if not self.magnitude:
+            if self.magnitude:
+                image = torch.abs(image).float()
+                image2 = torch.abs(image2).float()
+                image1 = normalize(image)
+                image2 = normalize(image2)
+            else:
                 image1 = self.complex2channels(image)
                 image2 = self.complex2channels(image2)
-            
-            image1 = normalize(image1)
-            image2 = normalize(image2)
     
             return image1, image2
 
@@ -237,16 +239,19 @@ class UFData(Dataset):
     @staticmethod
     def random_blur(image, max_sigma=3, kernel_size=19):
         blur_param = random.random() * max_sigma
-        real = functional.gaussian_blur(image.real, kernel_size, blur_param)
-        imaginary = functional.gaussian_blur(image.imag, kernel_size, blur_param)
-        return real + 1j * imaginary
+        if torch.is_complex(image):
+            real = functional.gaussian_blur(image.real, kernel_size, blur_param)
+            imaginary = functional.gaussian_blur(image.imag, kernel_size, blur_param)
+            return real + 1j * imaginary
+        else:
+            return functional.gaussian_blur(image, kernel_size, blur_param)
 
     @staticmethod
     def random_invert(image):
-        real, imaginary = image.real, image.imag
-        real = functional.invert(real)
-        imaginary = functional.invert(imaginary)
-        return real + 1j * imaginary    
+        # real, imaginary = image.real, image.imag
+        real = functional.invert(image)
+        # imaginary = functional.invert(imaginary)
+        return real #+ 1j * imaginary    
     
     @staticmethod
     def random_aliasing(image, max_acceleration=6, center_fraction_range=(0.08, 0.16)):

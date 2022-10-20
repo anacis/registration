@@ -194,6 +194,7 @@ class Trainer:
                 embeddings, target_embeddings, target_im1_embeddings = self.model(images, target_images)
                 logits, labels = self.model.get_logits_labels(embeddings, target_embeddings)
                 loss = self.criterion(logits, labels)
+                print(loss)
 
                 self.optimizer.zero_grad()
                 loss.backward()
