@@ -10,7 +10,7 @@ from torchvision.transforms import functional
 def normalize(img, low=0.01, high=0.99):
     high_quantile = torch.quantile(img, high)
     low_quantile = torch.quantile(img, low)
-    return (img-low_quantile)/(high_quantile - low_quantile + 1e-7)
+    return (img-low_quantile)/(high_quantile - low_quantile)
     # return img / 1.0
 
 def minmaxnorm(img):
@@ -128,6 +128,10 @@ class UFData(Dataset):
                 image1 = self.complex2channels(image)
                 image2 = self.complex2channels(image2)
     
+            #random crop image
+            image1 = self.random_crop(image1)
+            image2 = self.random_crop(image2)
+
             return image1, image2
 
         else:
@@ -143,7 +147,7 @@ class UFData(Dataset):
         # Either random noise, Random blur
 
         # image = self.random_rotate(image)  # TODO: maybe?
-        image = self.random_crop(image)
+        # image = self.random_crop(image)
 
         if random.random() < augment_probability:
             if random.random() < jitter_probability:
