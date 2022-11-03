@@ -91,7 +91,7 @@ class Trainer:
         self.dataset = UFData(self.args.datadir, magnitude=bool(self.args.use_magnitude), device=self.device,
                               fastmri=self.args.fastmri, random_augmentation=True, normalization=self.args.norm)
         self.dataloader = DataLoader(self.dataset, self.args.batchsize, shuffle=True, drop_last=True,
-                                     num_workers=8, pin_memory=True)#self.args.batchsize, pin_memory=True)
+                                     num_workers=8, pin_memory=True)
 
         self.model = MomentumModel(SimpleNet, feature_dim=self.args.features, momentum=self.args.momentum,
                                    temperature=self.args.temperature, device=self.device,

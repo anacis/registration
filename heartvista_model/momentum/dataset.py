@@ -47,6 +47,8 @@ class UFData(Dataset):
             self.image_paths = glob(f"{data_directory}/*.h5")
             self.h5_format = True
 
+        print(f"data dir {data_directory}")
+
         print(f"Using data from: {data_directory}\nFound {len(self.image_paths)} image paths.")
         self.device = device
         self.magnitude = magnitude
@@ -102,10 +104,10 @@ class UFData(Dataset):
             invert_probability = 0.9
 
             if random.random() < augment_probability:
-                # if random.random() < jitter_probability:
-                #     image = self.random_jitter(image)
-                # if random.random() < jitter_probability:
-                #     image2 = self.random_jitter(image2)
+                if random.random() < jitter_probability:
+                    image = self.random_jitter(image)
+                if random.random() < jitter_probability:
+                    image2 = self.random_jitter(image2)
                 if random.random() < blur_probability:
                     image = self.random_blur(image)
                 if random.random() < blur_probability:
@@ -214,15 +216,20 @@ class UFData(Dataset):
 
 
         """
-        real, imaginary = image.real, image.imag
+        if torch.is_complex(image):
+            real, imaginary = image.real, image.imag
+        else:
+            real = image
 
         brightness_param = random.uniform(1 - max_brightness, 1 + max_brightness)
         real = functional.adjust_brightness(real, brightness_param)
-        imaginary = functional.adjust_brightness(imaginary, brightness_param)
+        if torch.is_complex(image):
+            imaginary = functional.adjust_brightness(imaginary, brightness_param)
 
         gamma_param = random.uniform(1 - max_gamma, 1 + max_gamma)
         real = functional.adjust_gamma(real, gamma_param)
-        imaginary = functional.adjust_gamma(imaginary, gamma_param)
+        if torch.is_complex(image):
+            imaginary = functional.adjust_gamma(imaginary, gamma_param)
 
         # These color jitter augmentations don't make sense for grayscale - uncomment them if you are using color images
         # hue_param = random.uniform(- max_hue, max_hue)
@@ -232,8 +239,10 @@ class UFData(Dataset):
         # saturation_param = random.uniform(1 - max_saturation, 1 + max_saturation)
         # real = functional.adjust_saturation(real, saturation_param)
         # imaginary = functional.adjust_saturation(imaginary, saturation_param)
-
-        return real + 1j * imaginary
+        if torch.is_complex(image):
+            return real + 1j * imaginary
+        else:
+            return real
 
     @staticmethod
     def random_noise(image, max_std=0.2):

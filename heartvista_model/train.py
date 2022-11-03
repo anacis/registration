@@ -37,6 +37,10 @@ def get_args():
                       help='Loss to use (l2, ufloss, ssd, ncc)')
     parser.add_option('-a', '--alpha', default="100", type='int',
                       help='Alpha value to use for variational loss')
+    parser.add_option('--use_magnitude', action="store_true", default=False,
+                      help='If specified, use image magnitude.')
+    parser.add_option('--temperature', '--temp', default=1.00, type=float,
+                      help='temperature parameter default: 1')
 
     (options, args) = parser.parse_args()
     return options
@@ -46,8 +50,7 @@ class Trainer:
     def __init__(self):
 
         self.args = get_args()
-        os.environ["CUDA_VISIBLE_DEVICES"]= f"{self.args.gpu_id}"
-        self.device = torch.device(f"cuda:0")
+        self.device = torch.device(f"cuda:{self.args.gpu_id}")
         print("Using device:", self.device)
 
         self.checkpoint_dir = os.path.join(f"{self.args.logdir}", "checkpoints")
@@ -57,11 +60,12 @@ class Trainer:
     
         #Set Up Dataset and Dataloader
         self.get_transforms()
-        self.trainset =  RegistrationDataset(os.path.join(f"{self.args.datadir}", "train"), self.transform, self.shape_transform, self.contrast_transform)
-        self.testset = RegistrationDataset(os.path.join(f"{self.args.datadir}", "test"), self.transform, self.shape_transform, self.contrast_transform)
-
-        self.trainloader = torch.utils.data.DataLoader(self.trainset, self.args.batchsize, shuffle=True, num_workers=2)
-        self.trainloader = torch.utils.data.DataLoader(self.testset, self.args.batchsize, shuffle=False, num_workers=2)
+        self.trainset =  RegistrationDataset(os.path.join(f"{self.args.datadir}", "train"), magnitude=self.args.use_magnitude, spatial_transform = self.shape_transform)
+        self.trainloader = torch.utils.data.DataLoader(self.trainset, self.args.batchsize, shuffle=True, num_workers=8, pin_memory=True)
+        
+        # if self.args.test:
+        #     self.testset = RegistrationDataset(os.path.join(f"{self.args.datadir}", "test"), self.shape_transform)
+        #     self.testloader = torch.utils.data.DataLoader(self.testset, self.args.batchsize, shuffle=False, num_workers=8, pin_memory=True)
         
         self.net = RegistrationNet().to(self.device)
         self.criterion = self.variational_loss
@@ -71,14 +75,7 @@ class Trainer:
         if self.args.loss =="ufloss":
             self.load_ufloss()
 
-    def get_transforms(self):
-        self.transform = transforms.Compose([transforms.ToTensor(), transforms.RandomCrop((256, 256))])
-        
-        self.contrast_transform = transforms.Compose(
-            [transforms.ColorJitter(brightness=0.8, contrast=0.8, saturation=0.8, hue=0.4), 
-                transforms.GaussianBlur(kernel_size=5, sigma=(0.1, 2.0))])
-                # transforms.RandomAdjustSharpness(sharpness_factor=1.5, p=0.2)])
-
+    def get_transforms(self):        
         if self.args.shape == "perspective":
             self.shape_transform = transforms.Compose([transforms.RandomPerspective(distortion_scale=0.6, p=1.0)])
         else:
@@ -146,24 +143,31 @@ class Trainer:
                 self.start_epoch = 0
 
     def load_ufloss(self, ufloss_dir_checkpoint=""):
-        if not ufloss_dir_checkpoint:
-            ufloss_dir_checkpoint = sorted(glob(os.path.join(self.args.uflossdir, 'checkpoints/*')),
-                            key=lambda x: int(re.match(".*[a-z]+(\d+).pth", x).group(1)))[-1]
-        
+        ufloss_dir_checkpoint = sorted(glob(os.path.join(self.args.uflossdir, 'checkpoints/*')),
+                    key=lambda x: int(re.match(".*[a-z]+(\d+).pth", x).group(1)))[-1]
+
         if not ufloss_dir_checkpoint:
             print(f"couldn't find checkpoint in {self.args.uflossdir}")
             return
 
-        self.ksnet = MomentumModel(SimpleNet, magnitude=True)
+        self.ksnet = MomentumModel(SimpleNet, magnitude=self.args.use_magnitude, temperature=self.args.temperature)
+
         print(f"Loading UFLoss checkpoint from: {ufloss_dir_checkpoint}")
         # Loading on cpu before transferring to model
+        # print(self.ksnet)
+        # print(torch.load(ufloss_dir_checkpoint, "cpu")["state_dict"])
         self.ksnet.load_state_dict(torch.load(ufloss_dir_checkpoint, "cpu")["state_dict"])
         self.ksnet = self.ksnet.target_network
         self.ksnet.to(self.device)
         self.ksnet.eval()
-
-        # save_dir = os.path.join(self.args.logdir, "ufloss_results")
-        # os.makedirs(save_dir, exist_ok=True)
+        
+        # self.ksnet = MomentumModel(SimpleNet, magnitude=self.args.use_magnitude)
+        # print(f"Loading UFLoss checkpoint from: {ufloss_dir_checkpoint}")
+        # # Loading on cpu before transferring to model
+        # self.ksnet.load_state_dict(torch.load(ufloss_dir_checkpoint, "cpu")["state_dict"])
+        # self.ksnet = self.ksnet.target_network
+        # self.ksnet.to(self.device)
+        # self.ksnet.eval()
     
     
     def save_model(self, epoch, filepath="", **kwargs):
@@ -204,6 +208,7 @@ class Trainer:
                 moving, fixed, fixed_contrast = data
                 moving, fixed, fixed_contrast = moving.to(self.device), fixed.to(self.device), fixed_contrast.to(self.device)
 
+                print(f"moving shape {moving.shape}")
                 # zero the parameter gradients
                 self.optimizer.zero_grad()
 

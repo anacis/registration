@@ -7,6 +7,8 @@ class MomentumModel(torch.nn.Module):
                  temperature=1.0, device=torch.device('cpu'), magnitude=False):
         super().__init__()
         print(f"Using parameters:\n   Momentum: {momentum}\n   Temperature: {temperature}")
+        print(f"mag {magnitude}")
+
 
         self.device = device
         self.feature_dim = feature_dim
