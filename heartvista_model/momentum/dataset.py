@@ -129,8 +129,8 @@ class UFData(Dataset):
                 image2 = self.complex2channels(image2)
     
             #random crop image
-            image1 = self.random_crop(image1)
-            image2 = self.random_crop(image2)
+            image1, offset = self.random_crop(image1)
+            image2, _ = self.random_crop(image2, offset=offset)
 
             return image1, image2
 
@@ -195,7 +195,7 @@ class UFData(Dataset):
             # +1 since random doesn't include max. i.e [a, b).
             offset = np.random.randint(0, image.shape[1:] - self.cropped_image_size + 1)
         stop = offset + self.cropped_image_size
-        return image[:, offset[0]:stop[0], offset[1]:stop[1]]
+        return image[:, offset[0]:stop[0], offset[1]:stop[1]], offset
 
     @staticmethod
     def random_jitter(image, max_brightness=0, max_gamma=0, max_hue=0, max_saturation=0.9):
