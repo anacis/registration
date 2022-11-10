@@ -48,7 +48,6 @@ class RegistrationNet(nn.Module):
         super().__init__()
         
         #Pre Concat (ran twice in parallelish)
-        #In channels should be 1 because magnitude
         self.conv1 = nn.Conv2d(in_channels = 1, out_channels = 32, kernel_size = (3,3), padding=(1,1))
         self.bn1 = nn.BatchNorm2d(32)
         self.resnet1 = ResidualBlock(32, 32)
@@ -67,7 +66,7 @@ class RegistrationNet(nn.Module):
         self.conv3 = nn.Conv2d(in_channels = 128, out_channels = 64, kernel_size = (3,3),  padding=(1,1))
         self.bn3 = nn.BatchNorm2d(64)
         self.conv4 = nn.Conv2d(in_channels = 64, out_channels = 2, kernel_size = (3,3),  padding=(1,1))
-        self.bn4 = nn.BatchNorm2d(2)  #should contain deformation field
+        self.bn4 = nn.BatchNorm2d(2)  
         
         self.upsample = nn.UpsamplingBilinear2d(scale_factor=4)
     
@@ -80,7 +79,7 @@ class RegistrationNet(nn.Module):
         x2 = F.relu(self.bn1(self.conv1(x2)))
         x2 = self.downsample1(self.resnet1(x2))
         x2 = self.downsample2(self.resnet22(self.resnet21(x2)))
-        x2 = self.resnet3(x2) #Will this make the weights be shared?
+        x2 = self.resnet3(x2) 
         
         x = torch.cat((x1, x2), dim=1)
         

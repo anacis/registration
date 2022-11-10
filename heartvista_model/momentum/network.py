@@ -20,7 +20,6 @@ class SimpleNet(nn.Module):
 
     def __init__(self, num_classes=128, input_f=2):
         super().__init__()
-        print(f"input_f {input_f}")
 
         self.conv1 = ConvBatchNormRelu(input_f, 64, kernel_size=3, stride=2)
         self.conv2 = ConvBatchNormRelu(64, 128, kernel_size=3, stride=1)

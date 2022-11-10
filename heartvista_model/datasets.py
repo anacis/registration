@@ -16,7 +16,7 @@ class RegistrationDataset(UFData):
         fixed, fixed_contrast = super().__getitem__(index)
         
         #Apply Spatial Transform to Image 2 (moving input)
-        if self.target_transform:
-            moving = self.target_transform(fixed_contrast)
+        if self.spatial_transform:
+            moving = self.spatial_transform(fixed_contrast)
 
         return moving, fixed, fixed_contrast

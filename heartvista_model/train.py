@@ -14,6 +14,7 @@ import re
 from optparse import OptionParser
 from momentum.momentum_model import MomentumModel
 from momentum.network import SimpleNet
+import pdb
 
 def get_args():
     parser = OptionParser()
@@ -149,7 +150,7 @@ class Trainer:
         if not ufloss_dir_checkpoint:
             print(f"couldn't find checkpoint in {self.args.uflossdir}")
             return
-
+        # pdb.set_trace()
         self.ksnet = MomentumModel(SimpleNet, magnitude=self.args.use_magnitude, temperature=self.args.temperature)
 
         print(f"Loading UFLoss checkpoint from: {ufloss_dir_checkpoint}")
@@ -208,7 +209,6 @@ class Trainer:
                 moving, fixed, fixed_contrast = data
                 moving, fixed, fixed_contrast = moving.to(self.device), fixed.to(self.device), fixed_contrast.to(self.device)
 
-                print(f"moving shape {moving.shape}")
                 # zero the parameter gradients
                 self.optimizer.zero_grad()
 

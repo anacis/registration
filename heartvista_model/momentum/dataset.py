@@ -56,7 +56,8 @@ class UFData(Dataset):
         self.normalization = normalization
 
         if fastmri:  # Fast MRI Dataset:
-            self.cropped_image_size = np.array([640, 320]) - max_offset
+            # self.cropped_image_size = np.array([640, 320]) - max_offset
+            self.cropped_image_size = np.array([256, 256])
         else:  # Original mri.org Dataset:
             self.cropped_image_size = np.array(np.load(self.image_paths[0]).shape[-2:]) - max_offset
         # self.cropped_image_size = np.array([47, 47])  # Just the image size
@@ -98,7 +99,7 @@ class UFData(Dataset):
 
             #Augmentations we want to be insensitive to
             augment_probability= 0.9
-            jitter_probability= 0.9
+            jitter_probability= 0
             # noise_probability=0.8
             blur_probability= 0.9
             invert_probability = 0.9
@@ -200,7 +201,7 @@ class UFData(Dataset):
         return image[:, offset[0]:stop[0], offset[1]:stop[1]], offset
 
     @staticmethod
-    def random_jitter(image, max_brightness=0, max_gamma=0, max_hue=0, max_saturation=0.9):
+    def random_jitter(image, max_brightness=0.25, max_gamma=0.25, max_hue=0, max_saturation=0.9):
         """
         TODO: adjust_contrast doesnt support grayscale (neither does adjust_saturation)
 
