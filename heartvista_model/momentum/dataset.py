@@ -89,11 +89,14 @@ class UFData(Dataset):
         image = torch.from_numpy(original_image)
 
         if self.random_augmentation:
-            image = self.augment_image(image)  # Model will be sensitive to this
-            
             if self.magnitude:
                 image = torch.abs(image).float()
                 image = minmaxnorm(image)
+            
+            image, og = self.augment_image(image)  # Model will be sensitive to this
+            image = minmaxnorm(image)
+             
+            sensitive_image = torch.clone(image)
             
             image2 = torch.clone(image)
 
@@ -134,8 +137,10 @@ class UFData(Dataset):
             #random crop image
             image1, offset = self.random_crop(image1)
             image2, _ = self.random_crop(image2, offset=offset)
+            og, _ = self.random_crop(og, offset=offset)
+            sensitive_image, _ = self.random_crop(sensitive_image , offset=offset)
 
-            return image1, image2
+            return image1, image2, og, sensitive_image
 
         else:
             if self.magnitude:
@@ -151,6 +156,7 @@ class UFData(Dataset):
 
         # image = self.random_rotate(image)  # TODO: maybe?
         # image = self.random_crop(image)
+        og = torch.clone(image)
 
         if random.random() < augment_probability:
             if random.random() < jitter_probability:
@@ -167,7 +173,7 @@ class UFData(Dataset):
         #  Could also do off resonance? Is all you need.
         # TODO: load data from not only fastmri, but also undersampled recons with PICS
 
-        return image
+        return image, og
 
     @staticmethod
     def random_phase(image):
@@ -201,7 +207,7 @@ class UFData(Dataset):
         return image[:, offset[0]:stop[0], offset[1]:stop[1]], offset
 
     @staticmethod
-    def random_jitter(image, max_brightness=0.25, max_gamma=0.25, max_hue=0, max_saturation=0.9):
+    def random_jitter(image, max_brightness=0.5, max_gamma=0.5, max_hue=0, max_saturation=0):
         """
         TODO: adjust_contrast doesnt support grayscale (neither does adjust_saturation)
 
@@ -251,7 +257,7 @@ class UFData(Dataset):
         return image * (1 - std) + torch.randn(image.size(), dtype=image.dtype) * std
 
     @staticmethod
-    def random_blur(image, max_sigma=3, kernel_size=19):
+    def random_blur(image, max_sigma=3, kernel_size=7):#19):
         blur_param = random.random() * max_sigma
         if torch.is_complex(image):
             real = functional.gaussian_blur(image.real, kernel_size, blur_param)
