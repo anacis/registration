@@ -19,7 +19,7 @@ def minmaxnorm(img):
 class UFData(Dataset):
 
     def __init__(self, data_directory, max_offset=None, magnitude=False, device=torch.device('cpu'),
-                 fastmri=False, random_augmentation=True, normalization=0.99):
+                 fastmri=False, random_augmentation=True, augment_probability = 0.9, normalization=0.99):
         """
 
         Parameters
@@ -53,6 +53,7 @@ class UFData(Dataset):
         self.device = device
         self.magnitude = magnitude
         self.random_augmentation = random_augmentation
+        self.augment_probability = augment_probability
         self.normalization = normalization
 
         if fastmri:  # Fast MRI Dataset:
@@ -93,21 +94,21 @@ class UFData(Dataset):
                 image = torch.abs(image).float()
                 image = minmaxnorm(image)
             
-            image, og = self.augment_image(image)  # Model will be sensitive to this
+            image = self.augment_image(image)  # Model will be sensitive to this
             image = minmaxnorm(image)
              
-            sensitive_image = torch.clone(image)
+            # sensitive_image = torch.clone(image)
             
             image2 = torch.clone(image)
 
             #Augmentations we want to be insensitive to
-            augment_probability= 0.9
-            jitter_probability= 0
+            jitter_probability= 0.9
             # noise_probability=0.8
             blur_probability= 0.9
-            invert_probability = 0.9
+            invert_probability = 0.5
+            solarize_probability = 0
 
-            if random.random() < augment_probability:
+            if random.random() < self.augment_probability:
                 if random.random() < jitter_probability:
                     image = self.random_jitter(image)
                 if random.random() < jitter_probability:
@@ -121,6 +122,10 @@ class UFData(Dataset):
                         image = self.random_invert(image)
                     else:
                         image2 = self.random_invert(image2)
+                if random.random() < solarize_probability:
+                    image = self.random_solarize(image)
+                if random.random() < solarize_probability:
+                    image2 = self.random_solarize(image2)
 
             image = self.random_phase(image)
             image2 = self.random_phase(image2)
@@ -137,10 +142,10 @@ class UFData(Dataset):
             #random crop image
             image1, offset = self.random_crop(image1)
             image2, _ = self.random_crop(image2, offset=offset)
-            og, _ = self.random_crop(og, offset=offset)
-            sensitive_image, _ = self.random_crop(sensitive_image , offset=offset)
+            # og, _ = self.random_crop(og, offset=offset)
+            # sensitive_image, _ = self.random_crop(sensitive_image , offset=offset)
 
-            return image1, image2, og, sensitive_image
+            return image1, image2#, og, sensitive_image
 
         else:
             if self.magnitude:
@@ -156,7 +161,7 @@ class UFData(Dataset):
 
         # image = self.random_rotate(image)  # TODO: maybe?
         # image = self.random_crop(image)
-        og = torch.clone(image)
+        # og = torch.clone(image)
 
         if random.random() < augment_probability:
             if random.random() < jitter_probability:
@@ -173,7 +178,7 @@ class UFData(Dataset):
         #  Could also do off resonance? Is all you need.
         # TODO: load data from not only fastmri, but also undersampled recons with PICS
 
-        return image, og
+        return image#, og
 
     @staticmethod
     def random_phase(image):
@@ -207,7 +212,7 @@ class UFData(Dataset):
         return image[:, offset[0]:stop[0], offset[1]:stop[1]], offset
 
     @staticmethod
-    def random_jitter(image, max_brightness=0.5, max_gamma=0.5, max_hue=0, max_saturation=0):
+    def random_jitter(image, max_brightness=0.25, max_gamma=0.5, max_hue=0, max_saturation=0):
         """
         TODO: adjust_contrast doesnt support grayscale (neither does adjust_saturation)
 
@@ -273,6 +278,13 @@ class UFData(Dataset):
         # imaginary = functional.invert(imaginary)
         return real #+ 1j * imaginary    
     
+    @staticmethod
+    def random_solarize(image): 
+        image = minmaxnorm(image)
+        thresh = random.uniform(0, 0.5)
+        return functional.solarize(image, thresh)
+   
+   
     @staticmethod
     def random_aliasing(image, max_acceleration=6, center_fraction_range=(0.08, 0.16)):
         # plt.imshow(image[0].abs(), cmap="gray")

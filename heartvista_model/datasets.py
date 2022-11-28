@@ -5,9 +5,9 @@ from momentum.dataset import UFData
 
 class RegistrationDataset(UFData):
     def __init__(self, data_dir, magnitude=False, device=torch.device('cpu'), fastmri=True,
-                             norm=0.99, spatial_transform=None, contrast_augs=True):
+                             norm=0.99, spatial_transform=None, contrast_augs=True, augment_probability=0.9):
         super().__init__(data_dir, magnitude=magnitude, device=device,
-                              fastmri=fastmri, random_augmentation=contrast_augs)
+                              fastmri=fastmri, random_augmentation=contrast_augs, augment_probability=augment_probability)
         
         self.spatial_transform = spatial_transform
 

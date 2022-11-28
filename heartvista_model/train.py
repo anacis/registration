@@ -26,7 +26,7 @@ def get_args():
                       help='Directory for saving logs and checkpoints')
     parser.add_option('--uflossdir', "--ud",
                       help='Directory for loading UFLoss checkpoints')
-    parser.add_option('--learning_rate', '--lr', default=1e-4, type='float',
+    parser.add_option('--learning_rate', '--lr', default=1e-3, type='float',
                       help='learning rate for the model')
     parser.add_option('--batchsize', '--bs', dest='batchsize',
                       default=16, type='int', help='batch size for training')
@@ -42,6 +42,8 @@ def get_args():
                       help='If specified, use image magnitude.')
     parser.add_option('--temperature', '--temp', default=1.00, type=float,
                       help='temperature parameter default: 1')
+    parser.add_option('--augment_probability', '--aug_prob', default=0.9, type=float,
+                      help='contrast augmentation probability default: 0.9')
 
     (options, args) = parser.parse_args()
     return options
@@ -61,7 +63,7 @@ class Trainer:
     
         #Set Up Dataset and Dataloader
         self.get_transforms()
-        self.trainset =  RegistrationDataset(os.path.join(f"{self.args.datadir}", "train"), magnitude=self.args.use_magnitude, spatial_transform = self.shape_transform)
+        self.trainset =  RegistrationDataset(os.path.join(f"{self.args.datadir}", "train"), magnitude=self.args.use_magnitude, spatial_transform = self.shape_transform, augment_probability=self.args.augment_probability)
         self.trainloader = torch.utils.data.DataLoader(self.trainset, self.args.batchsize, shuffle=True, num_workers=8, pin_memory=True)
         
         # if self.args.test:
