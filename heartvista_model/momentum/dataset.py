@@ -211,13 +211,11 @@ class UFData(Dataset):
         new_img = f(img).reshape(shape)
 
         #select another image
-        other_index = random.randint(0, len(self.image_paths))
-        print(f"len {len(self.image_paths)}")
-        print(f"other_index {other_index}")
+        other_file = random.choice(self.image_paths)
         if self.h5_format:
-            other_img = np.array(h5py.File(self.image_paths[other_index])["target"])[None]
+            other_img = np.array(h5py.File(other_file)["target"])[None]
         else:
-            other_img = np.load(self.image_paths[other_index])[None]
+            other_img = np.load(other_file)[None]
         other_img = torch.from_numpy(other_img)
         other_img = torch.abs(other_img).float()
         other_img = minmaxnorm(other_img)
