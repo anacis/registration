@@ -6,6 +6,9 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from torchvision.transforms import functional
+import utils
+from scipy import interpolate
+from skimage.exposure import match_histograms
 
 def normalize(img, low=0.01, high=0.99):
     high_quantile = torch.quantile(img, high)
@@ -109,23 +112,29 @@ class UFData(Dataset):
             solarize_probability = 0
 
             if random.random() < self.augment_probability:
-                if random.random() < jitter_probability:
-                    image = self.random_jitter(image)
-                if random.random() < jitter_probability:
-                    image2 = self.random_jitter(image2)
-                if random.random() < blur_probability:
-                    image = self.random_blur(image)
-                if random.random() < blur_probability:
-                    image2 = self.random_blur(image2)
-                if random.random() < invert_probability:
-                    if random.random() < 0.5:
-                        image = self.random_invert(image)
-                    else:
-                        image2 = self.random_invert(image2)
-                if random.random() < solarize_probability:
-                    image = self.random_solarize(image)
-                if random.random() < solarize_probability:
-                    image2 = self.random_solarize(image2)
+                #with 50% prob do normal aug
+                if random.random() < 0:
+                    if random.random() < jitter_probability:
+                        image = self.random_jitter(image)
+                    if random.random() < jitter_probability:
+                        image2 = self.random_jitter(image2)
+                    if random.random() < blur_probability:
+                        image = self.random_blur(image)
+                    if random.random() < blur_probability:
+                        image2 = self.random_blur(image2)
+                    if random.random() < invert_probability:
+                        if random.random() < 0.5:
+                            image = self.random_invert(image)
+                        else:
+                            image2 = self.random_invert(image2)
+                    if random.random() < solarize_probability:
+                        image = self.random_solarize(image)
+                    if random.random() < solarize_probability:
+                        image2 = self.random_solarize(image2)
+                #with 50% prob do curve augmentation
+                else:
+                    "print testing"
+                    image2 = self.curve_aug(image2)
 
             image = self.random_phase(image)
             image2 = self.random_phase(image2)
@@ -180,6 +189,47 @@ class UFData(Dataset):
 
         return image#, og
 
+    
+    
+    def curve_aug(self, img):
+        """ 
+        map image to a new pixel intensity curve 
+        and then equalize the augmented image to a randomly selected image in the datase
+        """
+
+        #get mapping
+        kspace = torch.rand((1000, 1000,), dtype=torch.complex64) - 0.5 - 0.5j
+        kx = torch.linspace(-1, 1, 1000)
+        exp = torch.exp(-torch.sqrt(kx**2)/0.001)
+        mapping = utils.ifft1c(kspace * exp[None], dim=-1).real
+        mapping -= torch.amin(mapping, dim=-1, keepdim=True)
+        mapping /= torch.amax(mapping, dim=-1, keepdim=True)
+    
+        shape = img.shape
+        img = img.reshape(-1, 1)
+        f = interpolate.interp1d(torch.linspace(0, 1, 1000), mapping[0])
+        new_img = f(img).reshape(shape)
+
+        #select another image
+        other_index = random.randint(0, len(self.image_paths))
+        print(f"len {len(self.image_paths)}")
+        print(f"other_index {other_index}")
+        if self.h5_format:
+            other_img = np.array(h5py.File(self.image_paths[other_index])["target"])[None]
+        else:
+            other_img = np.load(self.image_paths[other_index])[None]
+        other_img = torch.from_numpy(other_img)
+        other_img = torch.abs(other_img).float()
+        other_img = minmaxnorm(other_img)
+        other_img = other_img.numpy()
+
+        #make the new mapped image match the histogram of the other image
+        #these need to be np arrays
+        new_img = match_histograms(new_img, other_img)
+        new_img = torch.from_numpy(new_img)
+    
+        return new_img
+    
     @staticmethod
     def random_phase(image):
         """Add random phase to image"""
