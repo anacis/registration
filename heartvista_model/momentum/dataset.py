@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from torchvision.transforms import functional
-import utils
+# import utils
 from scipy import interpolate
 from skimage.exposure import match_histograms
 
@@ -133,7 +133,7 @@ class UFData(Dataset):
                         image2 = self.random_solarize(image2)
                 #with 50% prob do curve augmentation
                 else:
-                    "print testing"
+                    # print("this is commented out rn")
                     image2 = self.curve_aug(image2)
 
             image = self.random_phase(image)
@@ -151,7 +151,7 @@ class UFData(Dataset):
             #random crop image
             image1, offset = self.random_crop(image1)
             image2, _ = self.random_crop(image2, offset=offset)
-            # og, _ = self.random_crop(og, offset=offset)
+            #  og, _ = self.random_crop(og, offset=offset)
             # sensitive_image, _ = self.random_crop(sensitive_image , offset=offset)
 
             return image1, image2#, og, sensitive_image
@@ -189,7 +189,12 @@ class UFData(Dataset):
 
         return image#, og
 
-    
+    @staticmethod
+    def ifft1c(tensor, dim=-1):
+        tensor = torch.fft.ifftshift(tensor, dim=dim)
+        tensor = torch.fft.ifft(tensor, dim=dim)
+        return torch.fft.fftshift(tensor, dim=dim)
+
     
     def curve_aug(self, img):
         """ 
@@ -201,7 +206,7 @@ class UFData(Dataset):
         kspace = torch.rand((1000, 1000,), dtype=torch.complex64) - 0.5 - 0.5j
         kx = torch.linspace(-1, 1, 1000)
         exp = torch.exp(-torch.sqrt(kx**2)/0.001)
-        mapping = utils.ifft1c(kspace * exp[None], dim=-1).real
+        mapping = self.ifft1c(kspace * exp[None], dim=-1).real
         mapping -= torch.amin(mapping, dim=-1, keepdim=True)
         mapping /= torch.amax(mapping, dim=-1, keepdim=True)
     

@@ -82,7 +82,9 @@ class Trainer:
         if self.args.shape == "perspective":
             self.shape_transform = transforms.Compose([transforms.RandomPerspective(distortion_scale=0.6, p=1.0)])
         else:
-            self.shape_transform = transforms.Compose([transforms.RandomAffine(degrees = 30, translate=(0.2, 0.2))])
+            deg = 0
+            x, y = 0.05, 0.05
+            self.shape_transform = transforms.Compose([transforms.RandomAffine(degrees = deg, translate=(x, y))])
             
     def variational_loss(self, resampled, fixed, deform_field):
         if self.args.loss == "l2":
