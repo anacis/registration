@@ -113,7 +113,7 @@ class UFData(Dataset):
 
             if random.random() < self.augment_probability:
                 #with 50% prob do normal aug
-                if random.random() < 0:
+                if random.random() >= 0:
                     if random.random() < jitter_probability:
                         image = self.random_jitter(image)
                     if random.random() < jitter_probability:
