@@ -83,7 +83,7 @@ class Trainer:
             self.shape_transform = transforms.Compose([transforms.RandomPerspective(distortion_scale=0.6, p=1.0)])
         else:
             deg = 10
-            x, y = 0, 0
+            x, y = 0.05, 0.05
             self.shape_transform = transforms.Compose([transforms.RandomAffine(degrees = deg, translate=(x, y))])
             
     def variational_loss(self, resampled, fixed, deform_field):
@@ -258,6 +258,8 @@ class Trainer:
             self.summary_train.add_images("resampled", torch.clip(resampled[:max_to_plot], 0, 1), epoch)
             self.summary_train.add_images("fixed", torch.clip(fixed[:max_to_plot], 0, 1), epoch)
             self.summary_train.add_images("fixed contrast", torch.clip(fixed_contrast[:max_to_plot], 0, 1), epoch)
+            self.summary_train.add_images("Error", torch.clip(torch.abs(resampled[:max_to_plot] - fixed_contrast[:max_to_plot]), 0, 1), epoch)
+
             
             deform_fields = (deform_fields + 2) / 4
             self.summary_train.add_images("deformation field x", torch.clip(deform_fields[:max_to_plot, 0:1], 0, 1), epoch)
