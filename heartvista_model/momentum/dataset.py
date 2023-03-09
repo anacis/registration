@@ -22,7 +22,7 @@ def minmaxnorm(img):
 class UFData(Dataset):
 
     def __init__(self, data_directory, max_offset=None, magnitude=False, device=torch.device('cpu'),
-                 fastmri=False, random_augmentation=True, augment_probability = 0.9, normalization=0.99):
+                 fastmri=False, random_augmentation=True, augment_probability = 0.9, normalization=0.99, crop=True):
         """
 
         Parameters
@@ -58,6 +58,7 @@ class UFData(Dataset):
         self.random_augmentation = random_augmentation
         self.augment_probability = augment_probability
         self.normalization = normalization
+        self.crop = crop
 
         if fastmri:  # Fast MRI Dataset:
             # self.cropped_image_size = np.array([640, 320]) - max_offset
@@ -149,8 +150,9 @@ class UFData(Dataset):
                 image2 = self.complex2channels(image2)
     
             #random crop image
-            image1, offset = self.random_crop(image1)
-            image2, _ = self.random_crop(image2, offset=offset)
+            if self.crop:
+                image1, offset = self.random_crop(image1)
+                image2, _ = self.random_crop(image2, offset=offset)
             #  og, _ = self.random_crop(og, offset=offset)
             # sensitive_image, _ = self.random_crop(sensitive_image , offset=offset)
 
